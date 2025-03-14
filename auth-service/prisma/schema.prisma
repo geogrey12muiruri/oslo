@@ -1,0 +1,40 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum UserRole {
+  STUDENT
+  LECTURER
+  HOD
+  ADMIN
+  REGISTRAR
+  STAFF
+  SUPER_ADMIN
+  AUDITOR_GENERAL  // Added for audit module
+}
+
+model User {
+  id        String    @id @default(uuid()) // UUID for consistency
+  email     String    @unique
+  password  String    // Hashed in app logic
+  role      UserRole
+  verified  Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  refreshTokens RefreshToken[]
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  token     String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+}

@@ -1,0 +1,22 @@
+const { PrismaClient, UserRole } = require('@prisma/client');
+const prisma = new PrismaClient();
+
+async function updateUserRole(email, newRole) {
+  try {
+    const user = await prisma.user.update({
+      where: { email },
+      data: { role: newRole },
+    });
+    console.log(`User role updated successfully: ${user.email} is now ${user.role}`);
+  } catch (error) {
+    console.error('Error updating user role:', error);
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+// Replace with the email of the user you want to update and the new role
+const email = 'greggambugua@gmail.com';
+const newRole = UserRole.ADMIN;
+
+updateUserRole(email, newRole);
