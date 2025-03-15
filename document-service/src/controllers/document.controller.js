@@ -2,6 +2,7 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const multer = require('multer');
 const path = require('path');
+const amqp = require('amqplib');
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -20,16 +21,45 @@ const createDocument = async (req, res) => {
   const fileUrl = req.file ? `/uploads/${req.file.filename}` : null;
 
   try {
+    // Fetch the latest revision number for the given version
+    const latestDocument = await prisma.document.findFirst({
+      where: { version },
+      orderBy: { revision: 'desc' },
+    });
+
+    // Increment the revision number if the version already exists
+    const newRevision = latestDocument ? latestDocument.revision + 1 : revision;
+
     const document = await prisma.document.create({
       data: {
         title,
         category,
         version,
-        revision: new Date(revision),
+        revision: newRevision,
         description,
         fileUrl,
       },
     });
+
+    // Publish an event to RabbitMQ
+    const connection = await amqp.connect('amqp://localhost');
+    const channel = await connection.createChannel();
+    const queue = 'document_created';
+    const message = JSON.stringify({
+      id: document.id,
+      title: document.title,
+      category: document.category,
+      version: document.version,
+      revision: document.revision,
+      description: document.description,
+      fileUrl: document.fileUrl,
+      createdAt: document.createdAt,
+    });
+
+    await channel.assertQueue(queue, { durable: true });
+    channel.sendToQueue(queue, Buffer.from(message));
+    console.log('Document created event published:', message);
+
     res.status(201).json(document);
   } catch (error) {
     console.error('Error creating document:', error);

@@ -7,7 +7,7 @@ generator client {
   provider = "prisma-client-js"
 }
 
-model Institution {
+model Tenant {
   id                 String    @id @default(uuid())
   name               String
   domain             String
@@ -30,13 +30,13 @@ model Institution {
 }
 
 model User {
-  id                 String    @id @default(uuid())
-  email              String    @unique
-  institutionId      String
-  role               UserRole
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
-  institution        Institution @relation(fields: [institutionId], references: [id])
+  id        String    @id @default(uuid())
+  email     String    @unique
+  tenantId  String
+  role      UserRole
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  tenant    Tenant    @relation(fields: [tenantId], references: [id])
 }
 
 enum UserRole {

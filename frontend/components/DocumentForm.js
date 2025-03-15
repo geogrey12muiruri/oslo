@@ -88,10 +88,10 @@ const DocumentForm = ({ setDocuments, closeModal }) => {
             />
           </div>
           <div>
-            <label htmlFor="revision" className="block text-sm font-medium text-gray-600">Revision Date</label>
+            <label htmlFor="revision" className="block text-sm font-medium text-gray-600">Revision</label>
             <input
               id="revision"
-              type="date"
+              type="number"
               value={revision}
               onChange={(e) => setRevision(e.target.value)}
               className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"

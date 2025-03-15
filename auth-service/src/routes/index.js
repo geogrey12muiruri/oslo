@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
+const tenantController = require('../controllers/tenantController'); // Import tenantController
 
 // Example route for login
 router.post('/login', authController.login);
@@ -26,6 +27,10 @@ router.post('/logout', authController.logout);
 
 // Route for forgot password
 router.post('/forgot-password', authController.forgotPassword);
+
+// Tenant routes
+router.get('/tenants', tenantController.getAllTenants); // Fetch all tenants
+router.get('/tenants/:tenantId', tenantController.getTenantById); // Fetch a tenant by ID
 
 
 // Route for deleting account

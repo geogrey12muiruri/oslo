@@ -1,16 +1,28 @@
 const { PrismaClient } = require('@prisma/client');
-const redis = require('redis');
+const { Kafka } = require('kafkajs');
 
 const prisma = new PrismaClient();
-const redisClient = redis.createClient({
-  url: process.env.REDIS_URL || 'redis://redis:6379',
-});
 
-// Connect to Redis
-redisClient.connect().catch((err) => {
-  console.error('Failed to connect to Redis:', err);
+// Kafka setup
+const kafka = new Kafka({
+  clientId: 'tenant-service',
+  brokers: [process.env.KAFKA_BROKER || 'kafka:9092'],
 });
+const producer = kafka.producer();
 
+const connectProducer = async () => {
+  try {
+    await producer.connect();
+    console.log('Kafka producer connected');
+  } catch (err) {
+    console.error('Failed to connect Kafka producer:', err);
+  }
+};
+
+// Connect producer on startup
+connectProducer();
+
+// Tenant creation with Kafka
 const createTenant = async (req, res) => {
   const {
     name,
@@ -35,7 +47,7 @@ const createTenant = async (req, res) => {
   }
 
   try {
-    // Create tenant
+    // Create tenant (Update 'institution' to 'tenant' if schema was adjusted)
     const tenant = await prisma.institution.create({
       data: {
         name,
@@ -52,7 +64,7 @@ const createTenant = async (req, res) => {
         timezone,
         currency,
         status,
-        createdBy: req.user.userId, // Ensure this is correctly set
+        createdBy: req.user.userId,
       },
     });
 
@@ -71,23 +83,55 @@ const createTenant = async (req, res) => {
         data: {
           email: initialAdminEmail,
           role: 'ADMIN',
-          institutionId: tenant.id,
+          institutionId: tenant.id, // Update to 'tenantId' if schema changed
         },
       });
     }
 
-    // Emit tenant_created event
-    await redisClient.publish('tenant_events', JSON.stringify({
-      event: 'tenant_created',
-      data: tenant,
-    }));
+    // Publish tenant_created event to Kafka
+    await producer.send({
+      topic: 'tenant.created',
+      messages: [
+        {
+          value: JSON.stringify({
+            id: tenant.id,
+            name,
+            domain,
+            logoUrl,
+            address,
+            city,
+            country,
+            phone,
+            email,
+            type,
+            accreditationNumber,
+            establishedYear,
+            timezone,
+            currency,
+            status,
+            createdBy: req.user.userId,
+            createdAt: tenant.createdAt.toISOString(),
+            updatedAt: tenant.updatedAt.toISOString(),
+          }),
+        },
+      ],
+    });
 
-    // Emit user_created event if admin was created
+    // Publish user_created event if admin was created
     if (initialAdmin) {
-      await redisClient.publish('user_events', JSON.stringify({
-        event: 'user_created',
-        data: { id: initialAdmin.id, email: initialAdmin.email, role: initialAdmin.role, tenantId: tenant.id },
-      }));
+      await producer.send({
+        topic: 'user.created',
+        messages: [
+          {
+            value: JSON.stringify({
+              id: initialAdmin.id,
+              email: initialAdmin.email,
+              role: initialAdmin.role,
+              tenantId: tenant.id,
+            }),
+          },
+        ],
+      });
     }
 
     res.status(201).json({ tenant, initialAdmin });
@@ -97,6 +141,7 @@ const createTenant = async (req, res) => {
   }
 };
 
+// Create user with Kafka
 const createUser = async (req, res) => {
   const { tenantId } = req.params;
   const { email, role } = req.body;
@@ -117,14 +162,23 @@ const createUser = async (req, res) => {
       data: {
         email,
         role,
-        institutionId: tenantId,
+        institutionId: tenantId, // Update to 'tenantId' if schema changed
       },
     });
 
-    await redisClient.publish('user_events', JSON.stringify({
-      event: 'user_created',
-      data: { id: user.id, email, role, tenantId },
-    }));
+    await producer.send({
+      topic: 'user.created',
+      messages: [
+        {
+          value: JSON.stringify({
+            id: user.id,
+            email,
+            role,
+            tenantId,
+          }),
+        },
+      ],
+    });
 
     res.status(201).json({
       message: 'User created',
@@ -139,6 +193,7 @@ const createUser = async (req, res) => {
   }
 };
 
+// Get all tenants (no events needed)
 const getAllTenants = async (req, res) => {
   try {
     const tenants = await prisma.institution.findMany();
@@ -149,6 +204,7 @@ const getAllTenants = async (req, res) => {
   }
 };
 
+// Delete tenant with Kafka
 const deleteTenant = async (req, res) => {
   const { tenantId } = req.params;
 
@@ -157,10 +213,17 @@ const deleteTenant = async (req, res) => {
       where: { id: tenantId },
     });
 
-    await redisClient.publish('tenant_events', JSON.stringify({
-      event: 'tenant_deleted',
-      data: tenant,
-    }));
+    await producer.send({
+      topic: 'tenant.deleted',
+      messages: [
+        {
+          value: JSON.stringify({
+            id: tenant.id,
+            name: tenant.name,
+          }),
+        },
+      ],
+    });
 
     res.status(200).json({ message: 'Tenant deleted successfully' });
   } catch (error) {
@@ -176,6 +239,8 @@ module.exports = {
   deleteTenant,
 };
 
+// Cleanup on shutdown
 process.on('SIGTERM', async () => {
-  await redisClient.quit();
+  await producer.disconnect();
+  console.log('Kafka producer disconnected');
 });

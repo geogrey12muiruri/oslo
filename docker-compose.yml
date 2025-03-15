@@ -42,11 +42,13 @@ services:
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/umsdb?schema=tenant
       - REDIS_URL=redis://redis:6379
       - ACCESS_TOKEN_SECRET=a8f2b91a87c3a6b7e4d8f19ab6c4e5e2f3d6c9b1d2a8e7f6a4b3c9d8e1f2g5h6
+      - KAFKA_BROKER=kafka:9092  # Add Kafka broker
     ports:
       - "5001:5001"
     depends_on:
       - postgres
       - redis
+      - kafka
     networks:
       - ums-network
 
@@ -64,11 +66,13 @@ services:
       - REFRESH_TOKEN_SECRET=b7d9e3c6f8a5b2c4d1e9f7a6b3c8e2f5g1d4h9a7e3c2b6f5g8d1e4c3b9a7f2g6
       - CLIENT_URL=http://localhost:3000
       - TENANT_SERVICE_URL=http://tenant-service:5001
+      - KAFKA_BROKER=kafka:9092  # Add Kafka broker
     ports:
       - "5000:5000"
     depends_on:
       - postgres
       - redis
+      - kafka
       - tenant-service
     networks:
       - ums-network
@@ -82,11 +86,13 @@ services:
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/umsdb?schema=document
       - REDIS_URL=redis://redis:6379
       - ACCESS_TOKEN_SECRET=a8f2b91a87c3a6b7e4d8f19ab6c4e5e2f3d6c9b1d2a8e7f6a4b3c9d8e1f2g5h6
+      - KAFKA_BROKER=kafka:9092  # Optional, if it needs Kafka later
     ports:
       - "5002:5002"
     depends_on:
       - postgres
       - redis
+      - kafka
     networks:
       - ums-network
 
@@ -109,6 +115,35 @@ services:
     container_name: redis
     ports:
       - "6379:6379"
+    networks:
+      - ums-network
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - ums-network
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
     networks:
       - ums-network
 
