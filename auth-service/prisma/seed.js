@@ -4,9 +4,31 @@ const bcrypt = require('bcryptjs');
 const prismaClient = new PrismaClient();
 
 // List of roles to use in the seed
-const roles = ["STUDENT", "LECTURER", "HOD", "ADMIN", "REGISTRAR", "STAFF"];
+const roles = [
+  "STUDENT",
+  "LECTURER",
+  "HOD",
+  "ADMIN",
+  "REGISTRAR",
+  "STAFF",
+  "SUPER_ADMIN",
+  "AUDITOR_GENERAL"
+];
 
 async function main() {
+  // Create a tenant
+  const tenant = await prismaClient.tenant.upsert({
+    where: { name: 'Default Tenant' },
+    update: {},
+    create: {
+      name: 'Default Tenant',
+      domain: 'default.com',
+      type: 'PUBLIC',
+      status: 'ACTIVE',
+      createdBy: 'system',
+    },
+  });
+
   // Seeding users with different roles
   await Promise.all(
     roles.map(async (role) => {
@@ -20,6 +42,9 @@ async function main() {
             email,
             password: hashedPassword, // Store the hashed password
             role: role,
+            tenant: {
+              connect: { id: tenant.id }, // Connect to the existing tenant
+            },
           },
         });
         console.log(`Seeded user: ${user.email}`);

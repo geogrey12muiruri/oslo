@@ -10,7 +10,7 @@ const AuditorDashboard = () => {
       <DashboardLayout>
         <div>
           <h1>Auditor Dashboard</h1>
-          {/* Admin dashboard content */}
+        
         </div>
       </DashboardLayout>
     </RoleProtectedRoute>

@@ -122,7 +122,7 @@ export default function Sidebar() {
         },
         {
           name: 'Audit Programs',
-          href: '/audit/programs',
+          href: '/auditor/audit-programs',
           access: ['auditor_general'],
           icon: List,
           submenu: [

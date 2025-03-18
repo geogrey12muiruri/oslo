@@ -25,10 +25,9 @@ const sendOTP = async (email) => {
     text: `Your verification code is: ${otp}. It expires in 5 minutes.`,
   });
 };
-
 // **REGISTER**
 exports.register = async (req, res) => {
-  const { email, password, role } = req.body;
+  const { email, password, role, tenantId } = req.body;
 
   console.log('Received registration request:', req.body);
 
@@ -45,10 +44,16 @@ exports.register = async (req, res) => {
       return res.status(400).json({ message: 'Password must be at least 12 characters long' });
     }
 
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+    if (!tenant) {
+      console.log('Tenant not found:', tenantId);
+      return res.status(404).json({ message: 'Tenant not found' });
+    }
+
     const hashedPassword = await bcrypt.hash(password, 12);
 
     await prisma.user.create({
-      data: { email, password: hashedPassword, verified: false, role },
+      data: { email, password: hashedPassword, verified: false, role, tenantId },
     });
 
     await sendOTP(email); // Send OTP for email verification

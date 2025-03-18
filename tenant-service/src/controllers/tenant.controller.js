@@ -47,8 +47,8 @@ const createTenant = async (req, res) => {
   }
 
   try {
-    // Create tenant (Update 'institution' to 'tenant' if schema was adjusted)
-    const tenant = await prisma.institution.create({
+    // Create tenant
+    const tenant = await prisma.tenant.create({
       data: {
         name,
         domain,
@@ -83,7 +83,7 @@ const createTenant = async (req, res) => {
         data: {
           email: initialAdminEmail,
           role: 'ADMIN',
-          institutionId: tenant.id, // Update to 'tenantId' if schema changed
+          tenantId: tenant.id,
         },
       });
     }
@@ -151,7 +151,7 @@ const createUser = async (req, res) => {
       return res.status(400).json({ error: 'Email and role are required' });
     }
 
-    const tenant = await prisma.institution.findUnique({
+    const tenant = await prisma.tenant.findUnique({
       where: { id: tenantId },
     });
     if (!tenant) {
@@ -162,7 +162,7 @@ const createUser = async (req, res) => {
       data: {
         email,
         role,
-        institutionId: tenantId, // Update to 'tenantId' if schema changed
+        tenantId: tenantId,
       },
     });
 
@@ -196,7 +196,7 @@ const createUser = async (req, res) => {
 // Get all tenants (no events needed)
 const getAllTenants = async (req, res) => {
   try {
-    const tenants = await prisma.institution.findMany();
+    const tenants = await prisma.tenant.findMany();
     res.status(200).json(tenants);
   } catch (error) {
     console.error('Error fetching tenants:', error);
@@ -209,7 +209,7 @@ const deleteTenant = async (req, res) => {
   const { tenantId } = req.params;
 
   try {
-    const tenant = await prisma.institution.delete({
+    const tenant = await prisma.tenant.delete({
       where: { id: tenantId },
     });
 

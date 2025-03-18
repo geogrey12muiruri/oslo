@@ -12,7 +12,7 @@ model Document {
   title       String
   category    String
   version     String
-  revision    DateTime
+  revision    String
   description String
   fileUrl     String
   createdAt   DateTime @default(now())

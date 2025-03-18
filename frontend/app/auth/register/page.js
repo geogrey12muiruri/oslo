@@ -8,7 +8,8 @@ export default function Register() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('STUDENT'); // Default role
-  const [institutionName, setInstitutionName] = useState('');
+  const [tenantId, setTenantId] = useState(''); // Updated to use tenantId
+  const [tenants, setTenants] = useState([]); // State to store fetched tenants
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -27,13 +28,27 @@ export default function Register() {
     return () => clearInterval(timer);
   }, [step, otpTimer]);
 
+  useEffect(() => {
+    // Fetch tenants when the component mounts
+    const fetchTenants = async () => {
+      try {
+        const response = await axios.get('http://localhost:5000/api/tenants');
+        setTenants(response.data);
+      } catch (error) {
+        console.error('Error fetching tenants:', error);
+      }
+    };
+
+    fetchTenants();
+  }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
       if (step === 1) {
         // Post request to the backend for registration
-        const response = await axios.post('http://localhost:5000/api/register', { email, password, role, institutionName });
+        const response = await axios.post('http://localhost:5000/api/register', { email, password, role, tenantId });
         setStep(2); // Move to OTP verification step
       } else if (step === 2) {
         // Post request to the backend for OTP verification
@@ -127,16 +142,21 @@ export default function Register() {
               </div>
 
               <div>
-                <label htmlFor="institutionName" className="block text-sm font-medium text-gray-600">Institution</label>
-                <input
-                  id="institutionName"
-                  type="text"
-                  placeholder="Enter your institution name"
-                  value={institutionName}
-                  onChange={(e) => setInstitutionName(e.target.value)}
+                <label htmlFor="tenantId" className="block text-sm font-medium text-gray-600">Institution</label>
+                <select
+                  id="tenantId"
+                  value={tenantId}
+                  onChange={(e) => setTenantId(e.target.value)}
                   className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
                   required
-                />
+                >
+                  <option value="">Select Institution</option>
+                  {tenants.map((tenant) => (
+                    <option key={tenant.id} value={tenant.id}>
+                      {tenant.name}
+                    </option>
+                  ))}
+                </select>
               </div>
             </>
           )}
