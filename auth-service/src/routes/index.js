@@ -9,6 +9,9 @@ router.post('/login', authController.login);
 // Example route for registration
 router.post('/register', authController.register);
 
+// Add the /me route
+router.get("/me", authController.getCurrentUser);
+
 // Route for verifying OTP
 router.post('/verify-otp', authController.verifyOTP);
 

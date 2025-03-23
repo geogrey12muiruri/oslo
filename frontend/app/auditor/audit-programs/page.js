@@ -1,151 +1,238 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/context/auth-context";
 import {
-  Button,
-  IconButton,
-  Tabs,
-  Tab,
-  Typography,
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
+  TableHeader,
   TableRow,
-  Paper,
-} from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
-import { useRouter } from "next/navigation";
+} from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Plus } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 export default function AuditProgramsPage() {
   const router = useRouter();
-  const [tab, setTab] = useState(0);
+  const { token, user } = useAuth();
+  const [tab, setTab] = useState("draft");
   const [auditPrograms, setAuditPrograms] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [submitStatus, setSubmitStatus] = useState({});
 
   useEffect(() => {
     const fetchPrograms = async () => {
       try {
-        const response = await fetch("http://localhost:5004/api/audit-programs");
-        if (!response.ok) {
-          throw new Error("Failed to fetch audit programs");
-        }
+        const response = await fetch("http://localhost:5004/api/audit-programs", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!response.ok) throw new Error("Failed to fetch audit programs");
         const data = await response.json();
-        setAuditPrograms(data);
+        console.log("Fetched audit programs:", data);
+        setAuditPrograms(Array.isArray(data) ? data : []);
       } catch (error) {
         console.error("Error fetching audit programs:", error);
+        setAuditPrograms([]);
       } finally {
         setLoading(false);
       }
     };
-    fetchPrograms();
-  }, []);
+    if (user?.role?.toUpperCase() === "AUDITOR_GENERAL") fetchPrograms();
+    else setLoading(false);
+  }, [token, user]);
 
-  const handleTabChange = (event, newValue) => {
-    setTab(newValue);
+  const handleCreateProgram = () => router.push("/auditor/new-program");
+
+  const handleSubmitForApproval = async (id) => {
+    setSubmitStatus((prev) => ({ ...prev, [id]: { loading: true, error: null } }));
+    try {
+      const response = await fetch(`http://localhost:5004/api/audit-programs/${id}/submit`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error("Failed to submit audit program");
+      const updatedProgram = await response.json();
+      console.log(`Audit Program ${id} submitted:`, updatedProgram);
+
+      const refreshedResponse = await fetch("http://localhost:5004/api/audit-programs", { headers: { Authorization: `Bearer ${token}` } });
+      const refreshedData = await refreshedResponse.json();
+      setAuditPrograms(Array.isArray(refreshedData) ? refreshedData : []);
+
+      setSubmitStatus((prev) => ({ ...prev, [id]: { loading: false, success: "Submitted for approval" } }));
+      setTimeout(() => setSubmitStatus((prev) => ({ ...prev, [id]: {} })), 3000);
+    } catch (error) {
+      console.error("Error submitting audit program:", error);
+      setSubmitStatus((prev) => ({ ...prev, [id]: { loading: false, error: "Failed to submit. Try again." } }));
+    }
   };
 
-  const handleCreateProgram = () => {
-    router.push("/auditor/new-program");
-  };
+  const handleAssignTeams = (auditProgramId) => router.push(`/auditor/assaign-teams/${auditProgramId}`);
 
-  const handleViewProgram = (id) => {
-    router.push(`/auditor/audit/${id}`);
-  };
+  const filteredPrograms = auditPrograms.filter((program) => {
+    const status = program.status || "";
+    return tab === "active" ? status === "Active" : tab === "completed" ? status === "Completed" : tab === "scheduled" ? status === "Scheduled" : status === "Draft" || status === "Pending Approval";
+  });
 
-  if (loading) {
-    return (
-      <div className="p-4 max-w-6xl mx-auto">
-        <Typography variant="h4" component="h1" className="mb-4 font-bold">
-          Audit Programs
-        </Typography>
-        <Typography>Loading...</Typography>
-      </div>
-    );
-  }
+  if (loading) return <div className="p-6 max-w-7xl mx-auto"><h1 className="text-3xl font-bold mb-6">Audit Programs</h1><p>Loading...</p></div>;
+  if (user?.role?.toUpperCase() !== "AUDITOR_GENERAL") return <div className="p-6 max-w-7xl mx-auto"><h1 className="text-3xl font-bold mb-6">Audit Programs</h1><p className="text-red-500">Access denied. Auditor General privileges required.</p></div>;
 
   return (
-    <div className="p-4 max-w-6xl mx-auto">
-      <Typography variant="h4" component="h1" className="mb-4 font-bold">
-        Audit Programs
-      </Typography>
+    <div className="p-6 max-w-7xl mx-auto">
+      <h1 className="text-3xl font-bold mb-6">Audit Programs</h1>
 
-      {/* Tabs for filtering programs */}
-      <Tabs
-        value={tab}
-        onChange={handleTabChange}
-        indicatorColor="primary"
-        textColor="primary"
-        className="mb-6"
-      >
-        <Tab label="Active Programs" />
-        <Tab label="Completed Programs" />
-        <Tab label="Scheduled Programs" />
-        <Tab label="Draft Programs" />
+      <Tabs value={tab} onValueChange={setTab} className="mb-6">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="active">Active Programs</TabsTrigger>
+          <TabsTrigger value="completed">Completed Programs</TabsTrigger>
+          <TabsTrigger value="scheduled">Scheduled Programs</TabsTrigger>
+          <TabsTrigger value="draft">Draft Programs</TabsTrigger>
+        </TabsList>
       </Tabs>
 
-      {/* Create New Program Icon Button */}
-      <div className="flex justify-end mb-4">
-        <IconButton color="primary" onClick={handleCreateProgram}>
-          <AddIcon />
-        </IconButton>
+      <div className="flex justify-end mb-6">
+        <Button variant="default" size="sm" className="bg-cyan-600 hover:bg-cyan-700" onClick={handleCreateProgram}>
+          <Plus className="h-4 w-4 mr-2" /> New Program
+        </Button>
       </div>
 
-      {/* Program Table */}
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>ID</TableCell>
-              <TableCell>Name</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell>Priority</TableCell>
-              <TableCell>Start Date</TableCell>
-              <TableCell>End Date</TableCell>
-              <TableCell>Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {auditPrograms
-              .filter((program) =>
-                tab === 0
-                  ? program.status === "Active"
-                  : tab === 1
-                  ? program.status === "Completed"
-                  : tab === 2
-                  ? program.status === "Scheduled"
-                  : program.status === "Draft"
-              )
-              .map((program) => (
-                <TableRow key={program.id}>
-                  <TableCell>{program.id}</TableCell>
-                  <TableCell>{program.name}</TableCell>
-                  <TableCell>{program.status}</TableCell>
-                  <TableCell>{program.priority}</TableCell>
-                  <TableCell>{new Date(program.startDate).toLocaleDateString()}</TableCell>
-                  <TableCell>{new Date(program.endDate).toLocaleDateString()}</TableCell>
-                  <TableCell>
-                  <Button
-                      variant="outlined"
-                      size="small"
-                      className="mr-2"
-                      onClick={() => handleViewProgram(program.id)}
+      <div className="space-y-6">
+        {filteredPrograms.length > 0 ? (
+          filteredPrograms.map((program) => (
+            <Card key={program.id} className="shadow-lg">
+              <CardHeader>
+                <CardTitle className="text-xl font-semibold">{program.name}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Accordion type="single" collapsible>
+                  <AccordionItem value={program.id}>
+                    <AccordionTrigger>View Audits ({program.audits?.length || 0})</AccordionTrigger>
+                    <AccordionContent>
+                      {/* Metadata as Title */}
+                      <div className="mb-4 p-3 bg-gray-100 rounded-lg shadow-inner">
+                        <h3 className="text-lg font-semibold">Audit Program: {program.name}</h3>
+                        <p className="text-sm text-gray-600"><strong>Objective:</strong> {program.auditProgramObjective || "N/A"}</p>
+                        <p className="text-sm text-gray-600"><strong>Duration:</strong> {new Date(program.startDate).toLocaleDateString()} - {new Date(program.endDate).toLocaleDateString()}</p>
+                        <p className="text-sm text-gray-600"><strong>Status:</strong> {program.status}</p>
+                      </div>
+
+                      {/* Vertical Audit Table */}
+                      <Table className="min-w-full border rounded-md shadow-sm">
+                        <TableHeader>
+                          <TableRow className="bg-muted/50">
+                            <TableHead className="font-bold border-r w-48 sticky left-0 bg-gray-200">Audit Component</TableHead>
+                            {program.audits?.map((audit, index) => (
+                              <TableHead key={audit.id} className="font-bold text-center border-r">
+                                Audit {index + 1}
+                              </TableHead>
+                            ))}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {/* Audit No Row */}
+                          <TableRow className="hover:bg-gray-50">
+                            <TableCell className="font-medium border-r">Audit No</TableCell>
+                            {program.audits?.map((audit, index) => (
+                              <TableCell key={audit.id} className="border-r text-center max-w-xs break-words">
+                                A-{index + 1}-{audit.auditProgramId.split("AP-")[1]}
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                          {/* Scope Row */}
+                          <TableRow className="hover:bg-gray-50">
+                            <TableCell className="font-medium border-r">Scope</TableCell>
+                            {program.audits?.map((audit) => (
+                              <TableCell key={audit.id} className="border-r max-w-xs break-words">
+                                <ul className="list-disc list-inside">
+                                  {audit.scope?.split(", ").map((item, idx) => (
+                                    <li key={idx}>{item}</li>
+                                  ))}
+                                </ul>
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                          {/* Objectives Row */}
+                          <TableRow className="hover:bg-gray-50">
+                            <TableCell className="font-medium border-r">Objectives</TableCell>
+                            {program.audits?.map((audit) => (
+                              <TableCell key={audit.id} className="border-r max-w-xs break-words">
+                                <ul className="list-disc list-inside">
+                                  {audit.specificAuditObjective?.map((obj, idx) => (
+                                    <li key={idx}>{obj}</li>
+                                  ))}
+                                </ul>
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                          {/* Methods Row */}
+                          <TableRow className="hover:bg-gray-50">
+                            <TableCell className="font-medium border-r">Methods</TableCell>
+                            {program.audits?.map((audit) => (
+                              <TableCell key={audit.id} className="border-r max-w-xs break-words">
+                                {audit.methods?.join(", ") || "N/A"}
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                          {/* Criteria Row */}
+                          <TableRow className="hover:bg-gray-50">
+                            <TableCell className="font-medium border-r">Criteria</TableCell>
+                            {program.audits?.map((audit) => (
+                              <TableCell key={audit.id} className="border-r max-w-xs break-words">
+                                {audit.criteria?.join(", ") || "N/A"}
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                          {/* Team Row */}
+                          <TableRow className="hover:bg-gray-50">
+                            <TableCell className="font-medium border-r">Team</TableCell>
+                            {program.audits?.map((audit) => (
+                              <TableCell key={audit.id} className="border-r max-w-xs break-words">
+                                {audit.team ? `${audit.team.leader || "TBD"} (${audit.team.members?.join(", ") || "None"})` : "Not Assigned"}
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                      {(!program.audits || program.audits.length === 0) && (
+                        <p className="text-center text-muted-foreground mt-4">No audits available</p>
+                      )}
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+                <div className="mt-4 flex justify-end space-x-2">
+                  {(program.status === "Draft" || program.status === "Pending Approval") && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleSubmitForApproval(program.id)}
+                      disabled={submitStatus[program.id]?.loading || !program.audits?.length}
                     >
-                      View
+                      {submitStatus[program.id]?.loading ? "Submitting..." : "Submit for Approval"}
                     </Button>
-                    <Button variant="outlined" size="small" color="secondary" className="mr-2">
-                      Edit
+                  )}
+                  {program.status === "Active" && (
+                    <Button variant="default" size="sm" className="bg-blue-600 hover:bg-blue-700" onClick={() => handleAssignTeams(program.id)}>
+                      Assign Teams
                     </Button>
-                    <Button variant="outlined" size="small" color="error">
-                      Delete
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+                  )}
+                  {submitStatus[program.id]?.success && <span className="text-green-500 text-sm">{submitStatus[program.id].success}</span>}
+                  {submitStatus[program.id]?.error && <span className="text-red-500 text-sm">{submitStatus[program.id].error}</span>}
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        ) : (
+          <p className="text-center text-muted-foreground">No audit programs found. Create a new one to get started!</p>
+        )}
+      </div>
+
+      <footer className="mt-8 text-sm text-muted-foreground"><p>Prepared by: Auditor General</p></footer>
     </div>
   );
 }
+
+export const dynamic = "force-dynamic";

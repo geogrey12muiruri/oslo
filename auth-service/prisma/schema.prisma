@@ -15,20 +15,20 @@ enum UserRole {
   REGISTRAR
   STAFF
   SUPER_ADMIN
-  AUDITOR_GENERAL  
+  AUDITOR_GENERAL
+  AUDITOR
 }
 
 model User {
-  id        String    @id @default(uuid()) // UUID for consistency
+  id        String    @id @default(uuid())
   email     String    @unique
-  password  String    // Hashed in app logic
+  password  String
   role      UserRole
   verified  Boolean   @default(false)
   tenantId  String
   tenant    Tenant    @relation(fields: [tenantId], references: [id])
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
-
   refreshTokens RefreshToken[]
 }
 
@@ -40,10 +40,11 @@ model RefreshToken {
   expiresAt DateTime
   createdAt DateTime  @default(now())
 }
+
 model Tenant {
   id                 String    @id @default(uuid())
   name               String    @unique
-  domain             String
+  domain             String    @unique
   logoUrl            String?
   address            String?
   city               String?
@@ -63,11 +64,15 @@ model Tenant {
 }
 
 enum InstitutionType {
-  PUBLIC
-  PRIVATE
+  UNIVERSITY
+  COLLEGE
+  SCHOOL
+  INSTITUTE
+  OTHER
 }
 
 enum InstitutionStatus {
   ACTIVE
   INACTIVE
+  PENDING
 }

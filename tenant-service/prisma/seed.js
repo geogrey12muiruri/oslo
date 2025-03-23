@@ -1,111 +1,108 @@
 const { PrismaClient } = require('@prisma/client');
-const { Kafka } = require('kafkajs');
-
 const prisma = new PrismaClient();
 
-// Kafka setup
-const kafka = new Kafka({
-  clientId: 'tenant-service',
-  brokers: [process.env.KAFKA_BROKER || 'kafka:9092'],
-});
-const producer = kafka.producer();
-
-const connectProducer = async () => {
-  try {
-    await producer.connect();
-    console.log('Kafka producer connected');
-  } catch (err) {
-    console.error('Failed to connect Kafka producer:', err);
-  }
-};
-
-// Connect producer on startup
-connectProducer();
-
 async function main() {
-  // Seed tenants
-  const tenant = await prisma.tenant.create({
+  console.log('Starting database seeding...');
+
+  // Tenant 1: Nairobi University
+  const tenant1 = await prisma.tenant.create({
     data: {
-      name: `University of Nairobi ${Date.now()}`, // Use a unique name
-      domain: `uon${Date.now()}.ac.ke`, // Use a unique domain
-      logoUrl: 'https://example.com/logo.png',
-      address: 'P.O. Box 30197, Nairobi, Kenya',
-      city: 'Nairobi',
-      country: 'Kenya',
-      phone: '+254 20 3318262',
-      email: `info${Date.now()}@uon.ac.ke`, // Use a unique email
-      type: 'PUBLIC',
-      accreditationNumber: 'CUE/12345',
-      establishedYear: 1956,
-      timezone: 'Africa/Nairobi',
-      currency: 'KES',
+      name: 'The Nairobi University',
+      domain: 'thenairobiuni.ac.ke',
+      email: 'theadmin3@nairobiuni.ac.ke',
+      type: 'UNIVERSITY',
       status: 'ACTIVE',
-      createdBy: 'super-admin-id', // Replace with actual Super Admin ID
+      createdBy: 'thesuperadmin1@nairobiuni.ac.ke',
+      address: 'Nairobi, Kenya',
+      phone: '+254 123 456 789',
     },
   });
 
-  // Publish tenant_created event to Kafka
-  await producer.send({
-    topic: 'tenant.created',
-    messages: [
-      {
-        value: JSON.stringify({
-          id: tenant.id,
-          name: tenant.name,
-          domain: tenant.domain,
-          logoUrl: tenant.logoUrl,
-          address: tenant.address,
-          city: tenant.city,
-          country: tenant.country,
-          phone: tenant.phone,
-          email: tenant.email,
-          type: tenant.type,
-          accreditationNumber: tenant.accreditationNumber,
-          establishedYear: tenant.establishedYear,
-          timezone: tenant.timezone,
-          currency: tenant.currency,
-          status: tenant.status,
-          createdBy: tenant.createdBy,
-          createdAt: tenant.createdAt.toISOString(),
-          updatedAt: tenant.updatedAt.toISOString(),
-        }),
-      },
+  const users1 = await prisma.user.createMany({
+    data: [
+      { email: 'thesuperadmin1@nairobiuni.ac.ke', role: 'SUPER_ADMIN', firstName: 'John', lastName: 'Admin', verified: true, tenantId: tenant1.id },
+      { email: 'student@nairobiuni.ac.ke', role: 'STUDENT', firstName: 'Alice', lastName: 'Mwangi', verified: true, tenantId: tenant1.id },
+      { email: 'lecturer@nairobiuni.ac.ke', role: 'LECTURER', firstName: 'Peter', lastName: 'Kimani', verified: true, tenantId: tenant1.id },
+      { email: 'hod1@nairobiuni.ac.ke', role: 'HOD', firstName: 'Mary', lastName: 'Wambui', verified: true, tenantId: tenant1.id },
+      { email: 'admin@nairobiuni.ac.ke', role: 'ADMIN', firstName: 'James', lastName: 'Otieno', verified: true, tenantId: tenant1.id },
+      { email: 'registrar@nairobiuni.ac.ke', role: 'REGISTRAR', firstName: 'Susan', lastName: 'Njeri', verified: true, tenantId: tenant1.id },
+      { email: 'staff@nairobiuni.ac.ke', role: 'STAFF', firstName: 'David', lastName: 'Kamau', verified: true, tenantId: tenant1.id },
+      { email: 'auditorg@nairobiuni.ac.ke', role: 'AUDITOR_GENERAL', firstName: 'Grace', lastName: 'Mumbi', verified: true, tenantId: tenant1.id },
+      { email: 'auditor@nairobiuni.ac.ke', role: 'AUDITOR', firstName: 'Paul', lastName: 'Kiptoo', verified: true, tenantId: tenant1.id },
+      { email: 'hod2@nairobiuni.ac.ke', role: 'HOD', firstName: 'Esther', lastName: 'Njoroge', verified: true, tenantId: tenant1.id },
+      { email: 'hod3@nairobiuni.ac.ke', role: 'HOD', firstName: 'Michael', lastName: 'Ochieng', verified: true, tenantId: tenant1.id },
     ],
   });
 
-  // Seed users
-  const user = await prisma.user.create({
+  const hod1 = await prisma.user.findUnique({ where: { email: 'hod1@nairobiuni.ac.ke' } });
+  const hod2 = await prisma.user.findUnique({ where: { email: 'hod2@nairobiuni.ac.ke' } });
+  const hod3 = await prisma.user.findUnique({ where: { email: 'hod3@nairobiuni.ac.ke' } });
+
+  const departments1 = await prisma.department.createMany({
+    data: [
+      { name: 'Computer Science', code: 'CS', tenantId: tenant1.id, headId: hod1.id },
+      { name: 'Mathematics', code: 'MATH', tenantId: tenant1.id, headId: hod2.id },
+      { name: 'Physics', code: 'PHYS', tenantId: tenant1.id, headId: hod3.id },
+    ],
+  });
+
+  await prisma.user.updateMany({
+    where: { email: { in: ['student@nairobiuni.ac.ke', 'lecturer@nairobiuni.ac.ke'] } },
+    data: { departmentId: (await prisma.department.findFirst({ where: { name: 'Computer Science', tenantId: tenant1.id } })).id },
+  });
+
+  // Tenant 2: Kisumu College
+  const tenant2 = await prisma.tenant.create({
     data: {
-      email: `admin${Date.now()}@uon.ac.ke`, // Use a unique email
-      tenantId: tenant.id,
-      role: 'ADMIN',
+      name: 'Kisumu College',
+      domain: 'kisumucollege.ac.ke',
+      email: 'admin@kisumucollege.ac.ke',
+      type: 'COLLEGE',
+      status: 'PENDING',
+      createdBy: 'superadmin@kisumucollege.ac.ke',
+      address: 'Kisumu, Kenya',
+      phone: '+254 987 654 321',
     },
   });
 
-  // Publish user_created event to Kafka
-  await producer.send({
-    topic: 'user.created',
-    messages: [
-      {
-        value: JSON.stringify({
-          id: user.id,
-          email: user.email,
-          role: user.role,
-          tenantId: tenant.id,
-        }),
-      },
+  const users2 = await prisma.user.createMany({
+    data: [
+      { email: 'superadmin@kisumucollege.ac.ke', role: 'SUPER_ADMIN', firstName: 'Linda', lastName: 'Achieng', verified: true, tenantId: tenant2.id },
+      { email: 'student@kisumucollege.ac.ke', role: 'STUDENT', firstName: 'Brian', lastName: 'Omondi', verified: true, tenantId: tenant2.id },
+      { email: 'lecturer@kisumucollege.ac.ke', role: 'LECTURER', firstName: 'Jane', lastName: 'Atieno', verified: true, tenantId: tenant2.id },
+      { email: 'hod1@kisumucollege.ac.ke', role: 'HOD', firstName: 'Tom', lastName: 'Okoth', verified: true, tenantId: tenant2.id },
+      { email: 'admin@kisumucollege.ac.ke', role: 'ADMIN', firstName: 'Ruth', lastName: 'Akinyi', verified: true, tenantId: tenant2.id },
+      { email: 'registrar@kisumucollege.ac.ke', role: 'REGISTRAR', firstName: 'Mark', lastName: 'Odhiambo', verified: true, tenantId: tenant2.id },
+      { email: 'staff@kisumucollege.ac.ke', role: 'STAFF', firstName: 'Faith', lastName: 'Anyango', verified: true, tenantId: tenant2.id },
+      { email: 'auditorg@kisumucollege.ac.ke', role: 'AUDITOR_GENERAL', firstName: 'Chris', lastName: 'Owino', verified: true, tenantId: tenant2.id },
+      { email: 'auditor@kisumucollege.ac.ke', role: 'AUDITOR', firstName: 'Nancy', lastName: 'Adhiambo', verified: true, tenantId: tenant2.id },
+      { email: 'hod2@kisumucollege.ac.ke', role: 'HOD', firstName: 'Daniel', lastName: 'Ogutu', verified: true, tenantId: tenant2.id },
     ],
   });
 
-  console.log('Seed data created successfully');
+  const hod1Kc = await prisma.user.findUnique({ where: { email: 'hod1@kisumucollege.ac.ke' } });
+  const hod2Kc = await prisma.user.findUnique({ where: { email: 'hod2@kisumucollege.ac.ke' } });
+
+  const departments2 = await prisma.department.createMany({
+    data: [
+      { name: 'Business', code: 'BUS', tenantId: tenant2.id, headId: hod1Kc.id },
+      { name: 'Education', code: 'EDU', tenantId: tenant2.id, headId: hod2Kc.id },
+    ],
+  });
+
+  await prisma.user.updateMany({
+    where: { email: { in: ['student@kisumucollege.ac.ke', 'lecturer@kisumucollege.ac.ke'] } },
+    data: { departmentId: (await prisma.department.findFirst({ where: { name: 'Business', tenantId: tenant2.id } })).id },
+  });
+
+  console.log('Seeding completed successfully!');
 }
 
 main()
   .catch((e) => {
-    console.error(e);
+    console.error('Error during seeding:', e);
     process.exit(1);
   })
   .finally(async () => {
-    await producer.disconnect();
     await prisma.$disconnect();
   });

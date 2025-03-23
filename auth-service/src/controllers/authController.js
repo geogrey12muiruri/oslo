@@ -6,8 +6,46 @@ const prisma = new PrismaClient();
 const nodemailer = require('nodemailer');
 const rateLimit = require('express-rate-limit');
 const Redis = require('ioredis');
+const { Kafka } = require('kafkajs');
 
 const redis = new Redis(process.env.REDIS_URL);
+
+// Kafka producer setup
+const kafka = new Kafka({
+  brokers: [process.env.KAFKA_BROKER || 'kafka:9092'],
+  retry: {
+    initialRetryTime: 500,
+    retries: 15,
+    maxRetryTime: 60000,
+  },
+});
+const producer = kafka.producer();
+
+let producerConnected = false;
+
+const connectProducer = async () => {
+  let retries = 15;
+  while (retries > 0) {
+    try {
+      await producer.connect();
+      console.log('Kafka producer connected');
+      producerConnected = true;
+      break;
+    } catch (err) {
+      console.error('Failed to connect Kafka producer:', err.message);
+      retries--;
+      if (retries === 0) {
+        console.error('Max retries reached for producer. Proceeding without Kafka.');
+        producerConnected = false;
+        break;
+      }
+      await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5s
+    }
+  }
+};
+
+// Start producer connection (non-blocking)
+connectProducer();
 
 // Generate and send OTP (used for registration)
 const sendOTP = async (email) => {
@@ -25,45 +63,50 @@ const sendOTP = async (email) => {
     text: `Your verification code is: ${otp}. It expires in 5 minutes.`,
   });
 };
-// **REGISTER**
+
 exports.register = async (req, res) => {
   const { email, password, role, tenantId } = req.body;
 
-  console.log('Received registration request:', req.body);
-
   try {
     const userExists = await prisma.user.findUnique({ where: { email } });
-    if (userExists) {
-      console.log('User already exists:', email);
-      return res.status(400).json({ message: 'User already exists' });
-    }
-
-    // Enforce strong password policies
-    if (password.length < 12) {
-      console.log('Password too short:', password);
-      return res.status(400).json({ message: 'Password must be at least 12 characters long' });
-    }
+    if (userExists) return res.status(400).json({ message: "User already exists" });
 
     const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
-    if (!tenant) {
-      console.log('Tenant not found:', tenantId);
-      return res.status(404).json({ message: 'Tenant not found' });
-    }
+    if (!tenant) return res.status(404).json({ message: "Tenant not found" });
 
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    await prisma.user.create({
+    const user = await prisma.user.create({
       data: { email, password: hashedPassword, verified: false, role, tenantId },
     });
 
-    await sendOTP(email); // Send OTP for email verification
+    if (role === "AUDITOR" && producerConnected) {
+      try {
+        await producer.send({
+          topic: "user.created",
+          messages: [
+            {
+              value: JSON.stringify({
+                id: user.id,
+                email: user.email,
+                role: user.role,
+                tenantId: user.tenantId,
+                createdAt: user.createdAt,
+              }),
+            },
+          ],
+        });
+        console.log("user.created event published to Kafka:", user);
+      } catch (err) {
+        console.error("Failed to publish user.created event:", err);
+      }
+    }
 
-    console.log('User registered successfully:', email);
-    return res.status(201).json({ message: 'User registered. Please verify using the OTP sent to your email.' });
-
+    await sendOTP(email);
+    return res.status(201).json({ message: "User registered. Please verify using the OTP sent to your email." });
   } catch (err) {
-    console.error('Error during registration:', err);
-    return res.status(500).json({ message: 'Server error during registration' });
+    console.error("Error during registration:", err);
+    return res.status(500).json({ message: "Server error during registration" });
   }
 };
 
@@ -92,21 +135,70 @@ exports.login = async (req, res) => {
   const { email, password } = req.body;
 
   try {
+    // Find the user by email
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) return res.status(400).json({ message: 'User not found' });
 
+    // Validate the password
     const validPassword = await bcrypt.compare(password, user.password);
     if (!validPassword) return res.status(400).json({ message: 'Invalid credentials' });
 
+    // Fetch tenant details
+    const tenant = await prisma.tenant.findUnique({ where: { id: user.tenantId } });
+    if (!tenant) return res.status(404).json({ message: 'Tenant not found' });
+
     // Generate JWT tokens
-    const accessToken = jwt.sign({ userId: user.id, role: user.role }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '15m' });
+    const accessToken = jwt.sign(
+      { userId: user.id, role: user.role, tenantId: user.tenantId },
+      process.env.ACCESS_TOKEN_SECRET,
+      { expiresIn: '15m' }
+    );
     const refreshToken = jwt.sign({ userId: user.id }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: '7d' });
 
-    return res.json({ accessToken, refreshToken, user });
-
+    // Return user details, tenant name, and tokens
+    return res.json({
+      accessToken,
+      refreshToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        tenantId: user.tenantId,
+        tenantName: tenant.name, // Include tenant name
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      },
+    });
   } catch (err) {
     console.error('Error during login:', err);
     return res.status(500).json({ message: 'Server error during login' });
+  }
+};
+
+// **GET CURRENT USER**
+exports.getCurrentUser = async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  const token = authHeader.split(" ")[1];
+
+  try {
+    const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: { id: true, email: true, role: true, tenantId: true, createdAt: true },
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    return res.json({ user });
+  } catch (err) {
+    console.error("Error verifying token:", err);
+    return res.status(401).json({ message: "Invalid or expired token" });
   }
 };
 // **REFRESH TOKEN**

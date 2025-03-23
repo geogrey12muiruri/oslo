@@ -18,7 +18,7 @@ export const AuthProvider = ({ children }) => {
       try {
         const accessToken = localStorage.getItem('accessToken');
         if (accessToken) {
-          const response = await axios.get('http://localhost:5000/api/auth/me', {
+          const response = await axios.get('http://localhost:5000/api/me', {
             headers: { Authorization: `Bearer ${accessToken}` },
           });
           setUser(response.data.user);
@@ -56,6 +56,9 @@ export const AuthProvider = ({ children }) => {
           break;
         case 'STUDENT':
           router.push('/student/dashboard');
+          break;
+          case 'AUDITOR':
+          router.push('/auditor-staff/dashboard');
           break;
         case 'AUDITOR_GENERAL':
           router.push('/auditor/dashboard');

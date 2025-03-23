@@ -10,7 +10,7 @@ import {
   Settings,
   User,
   ClipboardList,
-  GraduationCap,
+
   File,
   Building,
   List,
@@ -22,7 +22,8 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useAuth } from '../context/auth-context';
+import { useAuth } from '@/context/auth-context';
+
 
 const ACCESS_LEVELS_ALL = ['admin', 'hod', 'staff', 'student', 'super_admin', 'auditor_general'];
 
@@ -39,6 +40,10 @@ export default function Sidebar() {
       setRole(user.role.toLowerCase());
     }
   }, [user]);
+
+  const getAuditProgramsHref = (role) => {
+    return role === 'admin' ? '/admin/audit-programs' : '/auditor/audit-programs';
+  };
 
   const SIDEBAR_LINKS = [
     {
@@ -58,7 +63,7 @@ export default function Sidebar() {
         },
         {
           name: 'Documents',
-          href: '/admin/documents', // Update this link
+          href: '/admin/documents',
           access: ACCESS_LEVELS_ALL,
           icon: File,
         },
@@ -75,7 +80,7 @@ export default function Sidebar() {
         },
         {
           name: 'Institution',
-          href: '/manage/institution',
+          href: '/super-admin/institution',
           access: ['super_admin'],
           icon: Building,
         },
@@ -117,31 +122,31 @@ export default function Sidebar() {
         {
           name: 'Audit Dashboard',
           href: '/audit/dashboard',
-          access: ['auditor_general'],
+          access: ['admin', 'auditor_general'],
           icon: LayoutDashboard,
         },
         {
           name: 'Audit Programs',
-          href: '/auditor/audit-programs',
-          access: ['auditor_general'],
+          href: getAuditProgramsHref(role), // Dynamic href based on role
+          access: ['admin', 'auditor_general'],
           icon: List,
           submenu: [
             {
               name: 'Active Programs',
               href: '/audit/programs/active',
-              access: ['auditor_general'],
+              access: ['admin', 'auditor_general'],
               icon: FileTextIcon,
             },
             {
               name: 'Completed Programs',
               href: '/audit/programs/completed',
-              access: ['auditor_general'],
+              access: ['admin', 'auditor_general'],
               icon: FileCheck,
             },
             {
               name: 'New Program',
               href: '/audit/programs/new',
-              access: ['auditor_general'],
+              access: ['admin', 'auditor_general'],
               icon: FilePlus,
             },
           ],
@@ -149,25 +154,25 @@ export default function Sidebar() {
         {
           name: 'Tasks',
           href: '/audit/tasks',
-          access: ['auditor_general'],
+          access: ['admin', 'auditor_general'],
           icon: ClipboardList,
           submenu: [
             {
               name: 'All Tasks',
               href: '/audit/tasks/all',
-              access: ['auditor_general'],
+              access: ['admin', 'auditor_general'],
               icon: List,
             },
             {
               name: 'My Tasks',
               href: '/audit/tasks/mine',
-              access: ['auditor_general'],
+              access: ['admin', 'auditor_general'],
               icon: User,
             },
             {
               name: 'Assign Tasks',
               href: '/audit/tasks/assign',
-              access: ['auditor_general'],
+              access: ['admin', 'auditor_general'],
               icon: Users,
             },
           ],
@@ -175,25 +180,25 @@ export default function Sidebar() {
         {
           name: 'Reports',
           href: '/audit/reports',
-          access: ['auditor_general'],
+          access: ['admin', 'auditor_general'],
           icon: FileTextIcon,
           submenu: [
             {
               name: 'Draft Reports',
               href: '/audit/reports/drafts',
-              access: ['auditor_general'],
+              access: ['admin', 'auditor_general'],
               icon: FileTextIcon,
             },
             {
               name: 'Submitted Reports',
               href: '/audit/reports/submitted',
-              access: ['auditor_general'],
+              access: ['admin', 'auditor_general'],
               icon: FileCheck,
             },
             {
               name: 'Generate Report',
               href: '/audit/reports/generate',
-              access: ['auditor_general'],
+              access: ['admin', 'auditor_general'],
               icon: FilePlus,
             },
           ],
@@ -201,7 +206,7 @@ export default function Sidebar() {
         {
           name: 'Audit Trail',
           href: '/audit/trail',
-          access: ['auditor_general'],
+          access: ['admin', 'auditor_general'],
           icon: FileSearch,
         },
       ],
@@ -266,7 +271,7 @@ export default function Sidebar() {
                   return (
                     <Link
                       key={link.name}
-                      href={link.href}
+                      href={typeof link.href === 'function' ? link.href(role) : link.href} // Handle dynamic href
                       className="flex items-center justify-center lg:justify-start gap-3 px-3 py-2.5 text-gray-600 rounded-lg transition-all duration-200 hover:bg-blue-100 hover:text-blue-700 group"
                     >
                       <SidebarIcon icon={link.icon} />

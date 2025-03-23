@@ -1,6 +1,7 @@
 import "./globals.css";
 import { AuthProvider } from '../context/auth-context';
-
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 export const metadata = {
   title: "Create Next App",
@@ -13,6 +14,7 @@ export default function RootLayout({ children }) {
       <body>
         <AuthProvider>
           {children}
+          <ToastContainer position="top-right" autoClose={3000} />
         </AuthProvider>
       </body>
     </html>

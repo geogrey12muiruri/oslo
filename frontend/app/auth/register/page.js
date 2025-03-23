@@ -138,6 +138,7 @@ export default function Register() {
                   <option value="STAFF">Staff</option>
                   <option value="SUPER_ADMIN">Super Admin</option>
                   <option value="AUDITOR_GENERAL">Auditor General</option>
+                  <option value="AUDITOR">AUDITOR</option>
                 </select>
               </div>
 
